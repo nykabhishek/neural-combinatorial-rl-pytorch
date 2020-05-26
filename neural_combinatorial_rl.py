@@ -113,7 +113,7 @@ class Decoder(nn.Module):
 
         self.pointer = Attention(hidden_dim, use_tanh=use_tanh, C=tanh_exploration, use_cuda=self.use_cuda)
         self.glimpse = Attention(hidden_dim, use_tanh=False, use_cuda=self.use_cuda)
-        self.sm = nn.Softmax()
+        self.sm = nn.Softmax(dim=-1)
 
     def apply_mask_to_logits(self, step, logits, mask, prev_idxs):    
         if mask is None:
@@ -250,7 +250,9 @@ class Decoder(nn.Module):
         """
         batch_size = probs.size(0)
         # idxs is [batch_size]
-        idxs = probs.multinomial().squeeze(1)
+        # idxs = probs.multinomial().squeeze(1)
+        c = torch.distributions.Categorical(probs)
+        idxs = c.sample()
 
         # due to race conditions, might need to resample here
         for old_idxs in selections:
@@ -282,7 +284,7 @@ class Decoder(nn.Module):
             hyps = zip(*[beam[b].get_hyp(k) for k in ks[:n_best]])
             all_hyp += [hyps]
         
-        all_idxs = Variable(torch.LongTensor([[x for x in hyp] for hyp in all_hyp]).squeeze())
+        all_idxs = Variable(torch.LongTensor([[x for x in hyp] for hyp in all_hyp]).squeeze().unsqueeze(0))
       
         if all_idxs.dim() == 2:
             if all_idxs.size(1) > n_best:
@@ -395,7 +397,7 @@ class CriticNetwork(nn.Module):
         
         self.process_block = Attention(hidden_dim,
                 use_tanh=use_tanh, C=tanh_exploration, use_cuda=use_cuda)
-        self.sm = nn.Softmax()
+        self.sm = nn.Softmax(dim=-1)
         self.decoder = nn.Sequential(
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.ReLU(),
@@ -471,6 +473,7 @@ class NeuralCombOptRL(nn.Module):
         #        use_cuda)
        
         embedding_ = torch.FloatTensor(input_dim,
+        # embedding_ = torch.ones(input_dim,
             embedding_dim)
         if self.use_cuda: 
             embedding_ = embedding_.cuda()
@@ -510,17 +513,24 @@ class NeuralCombOptRL(nn.Module):
         # query the actor net for the input indices 
         # making up the output, and the pointer attn 
         probs_, action_idxs = self.actor_net(embedded_inputs)
+        #action_idxs is [sourceL x batch_size]
        
         # Select the actions (inputs pointed to 
         # by the pointer net) and the corresponding
-        # logits
-        # should be size [batch_size x 
+        # logits should be size [batch_size x 
         actions = []
+        actions_dtsp = []
         # inputs is [batch_size, input_dim, sourceL]
         inputs_ = inputs.transpose(1, 2)
+        # print(inputs_.size())
+        # print(action_idxs[0].size())
         # inputs_ is [batch_size, sourceL, input_dim]
+        # inputs_dtsp = inputs.transpose(2,0,1)
         for action_id in action_idxs:
             actions.append(inputs_[[x for x in range(batch_size)], action_id.data, :])
+            #actions is [sourceL, batch_size, input_dim]
+            # actions_dtsp.append(inputs_dtsp[action_id.data, [x for x in range(batch_size)], :])
+            # #actions is [batch_size, sourceL, input_dim]
 
         if self.is_train:
             # probs_ is a list of len sourceL of [batch_size x sourceL]
