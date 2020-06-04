@@ -7,7 +7,7 @@ import numpy as np
 import scipy.io as scio
 from numpy import arange
 from copy import deepcopy
-from oct2py import octave
+# from oct2py import octave
 # from nbtrans import nbtranscost
 
 def draw_point(point, arrow_length=0.5):

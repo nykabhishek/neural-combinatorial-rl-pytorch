@@ -119,7 +119,7 @@ elif COP == 'dtsp':
         data_dir=data_dir)
     training_dataset = dtsp_task.DTSPDataset(train=True, size=size,
          num_samples=int(args['train_size']))
-    val_dataset = dtsp_task.DTSPDataset(train=True, size=size,
+    val_dataset = dtsp_task.DTSPDataset(dataset_fname=val_fname,train=False, size=size,
             num_samples=int(args['val_size']))
 else:
     print('Currently unsupported task!')

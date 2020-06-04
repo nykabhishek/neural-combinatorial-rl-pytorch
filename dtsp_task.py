@@ -74,7 +74,7 @@ def reward(sample_solution, USE_CUDA=False):
         tour_len_[k] += cost[k]
 
     # tour_dub_len = torch.from_numpy(tour_len_).cuda()
-    print(str("Dubins:"), tour_len_)
+    # print(str("Dubins:"), tour_len_)
 
     # for i in range(n-1):
     #     tour_len += torch.norm(sample_solution[i] - sample_solution[i+1], dim=1)
@@ -344,7 +344,8 @@ class DTSPDataset(Dataset):
                 for l in tqdm(dset):
                     inputs, outputs = l.split(' output ')
                     sample = torch.zeros(1, )
-                    x = np.array(inputs.split(), dtype=np.float32).reshape([-1, 3]).T
+                    x_ = np.array(inputs.split(), dtype=np.float32).reshape([-1, 3]).T
+                    x = np.array([x_[0]*0.001,x_[1]*0.001,x_[2]])
                     # y.append(np.array(outputs.split(), dtype=np.int32)[:-1]) # skip the last one
                     self.data_set.append(x)
         else:
