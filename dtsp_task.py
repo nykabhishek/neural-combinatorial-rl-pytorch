@@ -55,8 +55,8 @@ def reward(sample_solution, USE_CUDA=False):
     # tour_len_ = []
     for i in range(n-1):
         for j in range(batch_size):
-            city1 = [solution_batch[i,j,0],solution_batch[i,j,1],solution_batch[i,j,2]*math.pi]
-            city2 = [solution_batch[i+1,j,0],solution_batch[i+1,j,1],solution_batch[i+1,j,2]*math.pi]
+            city1 = [solution_batch[i,j,0],solution_batch[i,j,1],solution_batch[i,j,2]*2*math.pi]
+            city2 = [solution_batch[i+1,j,0],solution_batch[i+1,j,1],solution_batch[i+1,j,2]*2*math.pi]
             # print(city1, city2)
             dubins = DubinsPath(city1, city2, 0.1)
             dubins.calc_paths()
@@ -65,8 +65,8 @@ def reward(sample_solution, USE_CUDA=False):
             tour_len_[j] += cost[j]
             
     for k in range(batch_size):
-        city_0 = [solution_batch[0,k,0],solution_batch[0,k,1],solution_batch[0,k,2]*math.pi]
-        city_n = [solution_batch[n-1,k,0],solution_batch[n-1,k,1],solution_batch[n-1,k,2]*math.pi]
+        city_0 = [solution_batch[0,k,0],solution_batch[0,k,1],solution_batch[0,k,2]*2*math.pi]
+        city_n = [solution_batch[n-1,k,0],solution_batch[n-1,k,1],solution_batch[n-1,k,2]*2*math.pi]
         dubins = DubinsPath(city_n, city_0)
         dubins.calc_paths()
         path, cost[k] = dubins.get_shortest_path()

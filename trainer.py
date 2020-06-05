@@ -119,8 +119,15 @@ elif COP == 'dtsp':
         data_dir=data_dir)
     training_dataset = dtsp_task.DTSPDataset(train=True, size=size,
          num_samples=int(args['train_size']))
-    val_dataset = dtsp_task.DTSPDataset(dataset_fname=val_fname,train=False, size=size,
+    # val_dataset = dtsp_task.DTSPDataset(dataset_fname=val_fname,train=False, size=size,
+    #         num_samples=int(args['val_size']))
+    if not args['is_train']:
+        val_dataset = dtsp_task.DTSPDataset(dataset_fname=val_fname,train=False, size=size,
             num_samples=int(args['val_size']))
+    else:
+        val_dataset = dtsp_task.DTSPDataset(train=True, size=size,
+            num_samples=int(args['val_size']))
+
 else:
     print('Currently unsupported task!')
     exit(1)
@@ -177,7 +184,7 @@ actor_scheduler = lr_scheduler.MultiStepLR(actor_optim,
 #            int(args['critic_lr_decay_step'])), gamma=float(args['critic_lr_decay_rate']))
 
 training_dataloader = DataLoader(training_dataset, batch_size=int(args['batch_size']),
-    shuffle=True, num_workers=4)
+    shuffle=True, num_workers=8)
 
 validation_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=1)
 
@@ -239,6 +246,8 @@ for i in range(epoch, epoch + int(args['n_epochs'])):
             reinforce = advantage * logprobs
             actor_loss = reinforce.mean()
             
+            avg_advantage = advantage.mean()
+
             actor_optim.zero_grad()
            
             actor_loss.backward()
@@ -269,9 +278,10 @@ for i in range(epoch, epoch + int(args['n_epochs'])):
             if not args['disable_tensorboard']:
                 log_value('avg_reward', R.mean().item(), step)
                 log_value('actor_loss', actor_loss.item(), step)
-                #log_value('critic_loss', critic_loss.item(), step)
+                # log_value('critic_loss', critic_loss.item(), step)
                 log_value('critic_exp_mvg_avg', critic_exp_mvg_avg.item(), step)
                 log_value('nll', nll.mean().item(), step)
+                log_value('avg(advantage = R - critic_exp_mvg_avg)', avg_advantage.item(), step)
 
             if step % int(args['log_step']) == 0:
                 print('epoch: {}, train_batch_id: {}, avg_reward: {}'.format(
@@ -357,7 +367,7 @@ for i in range(epoch, epoch + int(args['n_epochs'])):
             training_dataset = dtsp_task.DTSPDataset(train=True, size=size,
                 num_samples=int(args['train_size']))
             training_dataloader = DataLoader(training_dataset, batch_size=int(args['batch_size']),
-                shuffle=True, num_workers=1)
+                shuffle=True, num_workers=8)
         if COP == 'sort':
             train_fname, _ = sorting_task.create_dataset(
                 int(args['train_size']),
