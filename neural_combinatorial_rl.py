@@ -519,11 +519,9 @@ class NeuralCombOptRL(nn.Module):
         # by the pointer net) and the corresponding
         # logits should be size [batch_size x 
         actions = []
-        actions_dtsp = []
         # inputs is [batch_size, input_dim, sourceL]
         inputs_ = inputs.transpose(1, 2)
-        # print(inputs_.size())
-        # print(action_idxs[0].size())
+
         # inputs_ is [batch_size, sourceL, input_dim]
         # inputs_dtsp = inputs.transpose(2,0,1)
         for action_id in action_idxs:

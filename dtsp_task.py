@@ -61,13 +61,13 @@ def reward(sample_solution, USE_CUDA=False):
             dubins = DubinsPath(city1, city2, 0.1)
             dubins.calc_paths()
             path, cost[j] = dubins.get_shortest_path()
-    #         # tour_len += torch.norm(path, dim=2)
+            # tour_len += torch.norm(path, dim=2)
             tour_len_[j] += cost[j]
             
     for k in range(batch_size):
         city_0 = [solution_batch[0,k,0],solution_batch[0,k,1],solution_batch[0,k,2]*2*math.pi]
         city_n = [solution_batch[n-1,k,0],solution_batch[n-1,k,1],solution_batch[n-1,k,2]*2*math.pi]
-        dubins = DubinsPath(city_n, city_0)
+        dubins = DubinsPath(city_n, city_0, 0.1)
         dubins.calc_paths()
         path, cost[k] = dubins.get_shortest_path()
         # tour_len += torch.norm(sample_solution[n-1] - sample_solution[0], dim=1)
