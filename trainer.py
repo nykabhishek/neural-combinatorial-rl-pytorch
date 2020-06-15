@@ -40,6 +40,7 @@ parser.add_argument('--tanh_exploration', default=10, help='Hyperparam controlli
 parser.add_argument('--dropout', default=0., help='')
 parser.add_argument('--terminating_symbol', default='<0>', help='')
 parser.add_argument('--beam_size', default=1, help='Beam width for beam search')
+parser.add_argument('--disable_critic', default=1, help='Disable critic network and use exponential moving average')
 
 # Training
 parser.add_argument('--actor_net_lr', default=1e-4, help="Set the learning rate for the actor network")
@@ -119,14 +120,14 @@ elif COP == 'dtsp':
         data_dir=data_dir)
     training_dataset = dtsp_task.DTSPDataset(train=True, size=size,
          num_samples=int(args['train_size']))
-    # val_dataset = dtsp_task.DTSPDataset(dataset_fname=val_fname,train=False, size=size,
+    val_dataset = dtsp_task.DTSPDataset(dataset_fname=val_fname,train=False, size=size,
+            num_samples=int(args['val_size']))
+    # if not args['is_train']:
+    #     val_dataset = dtsp_task.DTSPDataset(dataset_fname=val_fname,train=False, size=size,
     #         num_samples=int(args['val_size']))
-    if not args['is_train']:
-        val_dataset = dtsp_task.DTSPDataset(dataset_fname=val_fname,train=False, size=size,
-            num_samples=int(args['val_size']))
-    else:
-        val_dataset = dtsp_task.DTSPDataset(train=True, size=size,
-            num_samples=int(args['val_size']))
+    # else:
+    #     val_dataset = dtsp_task.DTSPDataset(train=True, size=size,
+    #         num_samples=int(args['val_size']))
 
 else:
     print('Currently unsupported task!')
@@ -158,7 +159,8 @@ else:
         int(args['beam_size']),
         reward_fn,
         args['is_train'],
-        args['use_cuda'])
+        args['use_cuda'],
+        args['disable_critic'])
 
 
 save_dir = os.path.join(os.getcwd(),
@@ -171,17 +173,19 @@ try:
 except:
     pass
 
-#critic_mse = torch.nn.MSELoss()
-#critic_optim = optim.Adam(model.critic_net.parameters(), lr=float(args['critic_net_lr']))
+if not args['disable_critic']:
+    critic_mse = torch.nn.MSELoss()                                                                 #comment to switch from critic to exp_mov_avg
+    critic_optim = optim.Adam(model.critic_net.parameters(), lr=float(args['critic_net_lr']))       #comment to switch from critic to exp_mov_avg
 actor_optim = optim.Adam(model.actor_net.parameters(), lr=float(args['actor_net_lr']))
 
 actor_scheduler = lr_scheduler.MultiStepLR(actor_optim,
         range(int(args['actor_lr_decay_step']), int(args['actor_lr_decay_step']) * 1000,
             int(args['actor_lr_decay_step'])), gamma=float(args['actor_lr_decay_rate']))
 
-#critic_scheduler = lr_scheduler.MultiStepLR(critic_optim,
-#        range(int(args['critic_lr_decay_step']), int(args['critic_lr_decay_step']) * 1000,
-#            int(args['critic_lr_decay_step'])), gamma=float(args['critic_lr_decay_rate']))
+if not args['disable_critic']:
+    critic_scheduler = lr_scheduler.MultiStepLR(critic_optim,                                       #comment to switch from critic to exp_mov_avg
+        range(int(args['critic_lr_decay_step']), int(args['critic_lr_decay_step']) * 1000,
+            int(args['critic_lr_decay_step'])), gamma=float(args['critic_lr_decay_rate']))
 
 training_dataloader = DataLoader(training_dataset, batch_size=int(args['batch_size']),
     shuffle=True, num_workers=8)
@@ -193,7 +197,8 @@ beta = args['critic_beta']
 
 if args['use_cuda']:
     model = model.cuda()
-    #critic_mse = critic_mse.cuda()
+    if not args['disable_critic']:
+        critic_mse = critic_mse.cuda()                                                              #comment to switch from critic to exp_mov_avg
     critic_exp_mvg_avg = critic_exp_mvg_avg.cuda()
 
 step = 0
@@ -219,14 +224,23 @@ for i in range(epoch, epoch + int(args['n_epochs'])):
             if args['use_cuda']:
                 bat = bat.cuda()
 
-            R, probs, actions, actions_idxs = model(bat)
-        
+            if not args['disable_critic']:
+                R, v, probs, actions, action_idxs = model(bat)
+            else:
+                R, probs, actions, action_idxs = model(bat)
+
+
             if batch_id == 0:
                 critic_exp_mvg_avg = R.mean()
             else:
                 critic_exp_mvg_avg = (critic_exp_mvg_avg * beta) + ((1. - beta) * R.mean())
 
-            advantage = R - critic_exp_mvg_avg
+            if not args['disable_critic']:
+                advantage = R - v.squeeze(1)
+            else:
+                advantage = R - critic_exp_mvg_avg
+            
+            
             
             logprobs = 0
             nll = 0
@@ -250,7 +264,7 @@ for i in range(epoch, epoch + int(args['n_epochs'])):
 
             actor_optim.zero_grad()
            
-            actor_loss.backward()
+            # actor_loss.backward()                                         #uncomment to switch from critic to exp_mov_avg   
 
             # clip gradient norms
             torch.nn.utils.clip_grad_norm_(model.actor_net.parameters(),
@@ -259,26 +273,26 @@ for i in range(epoch, epoch + int(args['n_epochs'])):
             actor_optim.step()
             actor_scheduler.step()
 
-            critic_exp_mvg_avg = critic_exp_mvg_avg.detach()
+            critic_exp_mvg_avg = critic_exp_mvg_avg.detach()                #comment to switch from critic to exp_mov_avg
 
-            #critic_scheduler.step()
+            if not args['disable_critic']:
+                critic_scheduler.step()                                         #comment to switch from critic to exp_mov_avg
+                R = R.detach()                                                  #comment to switch from critic to exp_mov_avg
+                critic_loss = critic_mse(v.squeeze(1), R)                       #comment to switch from critic to exp_mov_avg
+                critic_optim.zero_grad()                                        #comment to switch from critic to exp_mov_avg
+                critic_loss.backward()                                          #comment to switch from critic to exp_mov_avg
+                torch.nn.utils.clip_grad_norm_(model.critic_net.parameters(),   #comment to switch from critic to exp_mov_avg
+                   float(args['max_grad_norm']), norm_type=2)
 
-            #R = R.detach()
-            #critic_loss = critic_mse(v.squeeze(1), R)
-            #critic_optim.zero_grad()
-            #critic_loss.backward()
-            
-            #torch.nn.utils.clip_grad_norm_(model.critic_net.parameters(),
-            #        float(args['max_grad_norm']), norm_type=2)
-
-            #critic_optim.step()
+                critic_optim.step()                                             #comment to switch from critic to exp_mov_avg
             
             step += 1
             
             if not args['disable_tensorboard']:
                 log_value('avg_reward', R.mean().item(), step)
                 log_value('actor_loss', actor_loss.item(), step)
-                # log_value('critic_loss', critic_loss.item(), step)
+                if not args['disable_critic']:
+                    log_value('critic_loss', critic_loss.item(), step)          #comment to switch from critic to exp_mov_avg
                 log_value('critic_exp_mvg_avg', critic_exp_mvg_avg.item(), step)
                 log_value('nll', nll.mean().item(), step)
                 log_value('avg(advantage = R - critic_exp_mvg_avg)', avg_advantage.item(), step)
@@ -290,9 +304,9 @@ for i in range(epoch, epoch + int(args['n_epochs'])):
                 example_input = []
                 for idx, action in enumerate(actions):
                     if task[0] == 'tsp':
-                        example_output.append(actions_idxs[idx][0].item())
+                        example_output.append(action_idxs[idx][0].item())
                     elif task[0] == 'dtsp':
-                        example_output.append(actions_idxs[idx][0].item())
+                        example_output.append(action_idxs[idx][0].item())
                     else:
                         example_output.append(action[0].item())  # <-- ?? 
                     example_input.append(sample_batch[0, :, idx][0])
@@ -318,7 +332,10 @@ for i in range(epoch, epoch + int(args['n_epochs'])):
         if args['use_cuda']:
             bat = bat.cuda()
 
-        R, probs, actions, action_idxs = model(bat)
+        if not args['disable_critic']:
+                R, v, probs, actions, action_idxs = model(bat)
+        else:
+                R, probs, actions, action_idxs = model(bat)
         
         avg_reward.append(R[0].item())
         val_step += 1.

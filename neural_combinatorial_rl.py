@@ -29,15 +29,16 @@ class Encoder(nn.Module):
         if self.use_cuda:
             enc_init_hx = enc_init_hx.cuda()
 
-        #enc_init_hx.data.uniform_(-(1. / math.sqrt(hidden_dim)),
+        # enc_init_hx = nn.Parameter(enc_init_hx)
+        # enc_init_hx.data.uniform_(-(1. / math.sqrt(hidden_dim)),
         #        1. / math.sqrt(hidden_dim))
 
         enc_init_cx = Variable(torch.zeros(hidden_dim), requires_grad=False)
         if self.use_cuda:
             enc_init_cx = enc_init_cx.cuda()
-
-        #enc_init_cx = nn.Parameter(enc_init_cx)
-        #enc_init_cx.data.uniform_(-(1. / math.sqrt(hidden_dim)),
+                         
+        # enc_init_cx = nn.Parameter(enc_init_cx) 
+        # enc_init_cx.data.uniform_(-(1. / math.sqrt(hidden_dim)),        
         #        1. / math.sqrt(hidden_dim))
         return (enc_init_hx, enc_init_cx)
 
@@ -250,7 +251,6 @@ class Decoder(nn.Module):
         """
         batch_size = probs.size(0)
         # idxs is [batch_size]
-        # idxs = probs.multinomial().squeeze(1)
         c = torch.distributions.Categorical(probs)
         idxs = c.sample()
 
@@ -445,13 +445,14 @@ class NeuralCombOptRL(nn.Module):
             beam_size,
             objective_fn,
             is_train,
-            use_cuda):
+            use_cuda,
+            disable_critic):
         super(NeuralCombOptRL, self).__init__()
         self.objective_fn = objective_fn
         self.input_dim = input_dim
         self.is_train = is_train
         self.use_cuda = use_cuda
-
+        self.disable_critic = disable_critic
         
         self.actor_net = PointerNetwork(
                 embedding_dim,
@@ -464,16 +465,16 @@ class NeuralCombOptRL(nn.Module):
                 beam_size,
                 use_cuda)
         
-        #self.critic_net = CriticNetwork(
-        #        embedding_dim,
-        #        hidden_dim,
-        #        n_process_block_iters,
-        #        tanh_exploration,
-        #        False,
-        #        use_cuda)
+        if not self.disable_critic:
+            self.critic_net = CriticNetwork(                #comment to switch from critic to exp_mov_avg
+                embedding_dim,
+                hidden_dim,
+                n_process_block_iters,
+                tanh_exploration,
+                False,
+                use_cuda)
        
         embedding_ = torch.FloatTensor(input_dim,
-        # embedding_ = torch.ones(input_dim,
             embedding_dim)
         if self.use_cuda: 
             embedding_ = embedding_.cuda()
@@ -513,7 +514,7 @@ class NeuralCombOptRL(nn.Module):
         # query the actor net for the input indices 
         # making up the output, and the pointer attn 
         probs_, action_idxs = self.actor_net(embedded_inputs)
-        #action_idxs is [sourceL x batch_size]
+        # action_idxs is [sourceL x batch_size]
        
         # Select the actions (inputs pointed to 
         # by the pointer net) and the corresponding
@@ -523,12 +524,9 @@ class NeuralCombOptRL(nn.Module):
         inputs_ = inputs.transpose(1, 2)
 
         # inputs_ is [batch_size, sourceL, input_dim]
-        # inputs_dtsp = inputs.transpose(2,0,1)
         for action_id in action_idxs:
             actions.append(inputs_[[x for x in range(batch_size)], action_id.data, :])
             #actions is [sourceL, batch_size, input_dim]
-            # actions_dtsp.append(inputs_dtsp[action_id.data, [x for x in range(batch_size)], :])
-            # #actions is [batch_size, sourceL, input_dim]
 
         if self.is_train:
             # probs_ is a list of len sourceL of [batch_size x sourceL]
@@ -540,12 +538,15 @@ class NeuralCombOptRL(nn.Module):
             probs = probs_
 
         # get the critic value fn estimates for the baseline
-        # [batch_size]
-        #v = self.critic_net(embedded_inputs)
+        if not self.disable_critic:
+            # [batch_size]
+            v = self.critic_net(embedded_inputs)                #comment to switch from critic to exp_mov_avg
     
         # [batch_size]
         R = self.objective_fn(actions, self.use_cuda)
         
-        #return R, v, probs, actions, action_idxs
-        return R, probs, actions, action_idxs
+        if not self.disable_critic:
+            return R, v, probs, actions, action_idxs
+        else:
+            return R, probs, actions, action_idxs
 

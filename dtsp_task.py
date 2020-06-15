@@ -345,7 +345,7 @@ class DTSPDataset(Dataset):
                     inputs, outputs = l.split(' output ')
                     sample = torch.zeros(1, )
                     x_ = np.array(inputs.split(), dtype=np.float32).reshape([-1, 3]).T
-                    x = np.array([x_[0]*0.001,x_[1]*0.001,x_[2]])
+                    x = np.array([x_[0]*0.001,x_[1]*0.001,x_[2]/(2*math.pi)])
                     # y.append(np.array(outputs.split(), dtype=np.int32)[:-1]) # skip the last one
                     self.data_set.append(x)
         else:

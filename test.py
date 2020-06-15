@@ -3,6 +3,7 @@
 import argparse
 import os
 from tqdm import tqdm 
+import math
 
 import pprint as pp
 import numpy as np
@@ -43,8 +44,8 @@ def reward(bat_, index, USE_CUDA=False):
 
     for j in range(sourceL-1):
         for i in range(batch_size):
-            city1 = [bat[i,0,int(index[j])], bat[i,1,int(index[j])], bat[i,2,int(index[j])]]
-            city2 = [bat[i,0,int(index[j+1])], bat[i,1,int(index[j+1])], bat[i,2,int(index[j+1])]]
+            city1 = [bat[i,0,int(index[j])], bat[i,1,int(index[j])], bat[i,2,int(index[j])]*2*math.pi]
+            city2 = [bat[i,0,int(index[j+1])], bat[i,1,int(index[j+1])], bat[i,2,int(index[j+1])]*2*math.pi]
             # print(city1, city2)
             dubins = DubinsPath(city1, city2, 0.1)
             dubins.calc_paths()
@@ -53,8 +54,8 @@ def reward(bat_, index, USE_CUDA=False):
             tour_len += cost
 
     for i in range(batch_size):
-        city1 = [bat[i,0,int(index[sourceL-1])], bat[i,1,int(index[sourceL-1])], bat[i,2,int(index[sourceL-1])]]
-        city2 = [bat[i,0,int(index[0])], bat[i,1,int(index[0])], bat[i,2,int(index[j+1])]]
+        city1 = [bat[i,0,int(index[sourceL-1])], bat[i,1,int(index[sourceL-1])], bat[i,2,int(index[sourceL-1])]*2*math.pi]
+        city2 = [bat[i,0,int(index[0])], bat[i,1,int(index[0])], bat[i,2,int(index[j+1])]*2*math.pi]
         dubins = DubinsPath(city1, city2, 0.1)
         dubins.calc_paths()
         path, cost = dubins.get_shortest_path()
@@ -203,11 +204,7 @@ for epoch_file in os.listdir(save_dir):
     if args['load_path'] != '':
         print('  [*] Loading model from {}'.format(model_path))
 
-        model = torch.load(
-            os.path.join(
-                os.getcwd(),
-                args['load_path']
-            ))
+        model = torch.load(model_path)
         model.actor_net.decoder.max_length = size
         model.is_train = args['is_train']
     else:
